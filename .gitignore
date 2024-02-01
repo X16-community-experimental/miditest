@@ -1,2 +1,4 @@
 x16emu
 rom.bin
+*.o
+*.PRG
