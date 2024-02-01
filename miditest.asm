@@ -7,7 +7,8 @@
 .include "library/macros.inc"
 .include "library/graphics/main.asm"
 
-
+; The MIDI IO base, which depends on the IO and Hi/Lo jumper settings on the card.
+; Base address is silkscreen on the card.
 MIDI_IO_BASE=$9F68
 RX_BUFFER=MIDI_IO_BASE           ; Read Only
 TX_HOLDING=MIDI_IO_BASE          ; Write Only
@@ -24,30 +25,44 @@ SCRATCH=MIDI_IO_BASE + 7
 DIVISOR_LATCH_LOW = MIDI_IO_BASE
 DIVISOR_LATCH_HI = MIDI_IO_BASE + 1
 
-; 
-; Bit 7 = Divisor Latch
-; Bit 6 = Break Control
-; Bit 5 = Sticky Parity
-; Bit 4 = Parity Select
-; Bit 3 = Parity Enable (0 for none)
-; Bit 2 = Stop Bits (0 to 1 stop bit)
-; Bits 0 & 1 = Word Length (both to 1 = 8-bits)
+;; Line Control Register Flags
+; Bit 7				: Divisor Latch
+; Bit 6				: Break Control
+; Bit 5				: Sticky Parity
+; Bit 4				: Parity Select
+; Bit 3				: Parity Enable (0 for none)
+; Bit 2				: Stop Bits (0 to 1 stop bit)
+; Bits 0 & 1	: Word Length (both to 1 = 8-bits)
 ; No Partity, 1 Stop, 8-Bits
 LCR_SETUP  = %00000011
 
-;INTR_SETUP = %00000111
+;; Interrupt Enable Flags
+; Bits 7-4		: Unused (always cleared)
+; Bit 3				: 1 = Enable Modem Status Interrupt
+; Bit 2				: 1 = Enable Receiver Line Status Intterupt
+; Bit 1				: 1 = Enable THRE (Transmission Holding Register) Interrupt
+; Bit 0				: 1 = Enable Received Data Available Interrupt
 INTR_SETUP = %00000000
 
+;; FIFO Control Register Flags
+; Bits 7-6		: Buffer size (00 = $01, 01 = $04, 10 = $08, 11 = $0E)
+; Bits 5-4		: Reserved
+; Bit 3				: When FCR0 set, assert !RXRDY and !TXRDY pins
+; Bit 2				: Clears TX FIFO and counter
+; Bit 1				: Clears RX FIFO and counter
+; Bit 0				: Enable FIFO Buffers
 FIFO_SETUP = %00000111
 
-; MIDI SPEED 31.25k
-; Crystal: 18.432 MHz
-; In Hz: 18432000
-; MIDI Baud: 31.25k
-; Divisor = Hz / (MIDI Baud * 16)
-; 37, or $25
+;; MIDI Baud Rate
+; MIDI Baud per specification	: 31.25k (31250)
+; Crystal											: 18.432 MHz
+; Crystal In Hz								: 18432000
+; Divisor 										: Hz / (MIDI Baud * 16)														
+; Result: 										: 37, or $25
 MIDI_BAUD_DIV_LO = $25
 MIDI_BAUD_DIV_HI = $00
+
+;; Display code (lifted from Dreamtracker's setup)
 
 cursor_old_color: .byte $00
 cursor_x: .byte $00
@@ -72,135 +87,131 @@ palette:
 .byte $9F,$0A     ; light blue
 .byte $88,$08     ; light gray
 
+;; Setup screen and IO card
 start:
-  stz VERA_ctrl      ; Select primary VRAM address
-  stz VERA_addr_med  ; Set primary address med byte to 0
-  stz VERA_addr_low  ; Set Primary address low byte to 0
-  stz VERA_addr_high ; Set primary address bank to 0, stride to 0
+	stz VERA_ctrl      ; Select primary VRAM address
+	stz VERA_addr_med  ; Set primary address med byte to 0
+	stz VERA_addr_low  ; Set Primary address low byte to 0
+	stz VERA_addr_high ; Set primary address bank to 0, stride to 0
 
-  lda #RES128x64x16      ; L0 is the pattern scroll, instrument edit, env edit space
-  sta VERA_L0_config
-  lda #RES128x64x16       ; L1 is the UI
-  sta VERA_L1_config
+	lda #RES128x64x16      ; L0 is the pattern scroll, instrument edit, env edit space
+	sta VERA_L0_config
+	lda #RES128x64x16       ; L1 is the UI
+	sta VERA_L1_config
 
-  ; L0 = Pattern Data 
-  ; ($10000 start of HiVRAM)
-  lda #L0_MAPBASE
-  sta VERA_L0_mapbase
-  ; L1 = UI
-  ; ($00000 start of LoVRAM)
-  stz VERA_L1_mapbase
+	; L0 = Pattern Data 
+	; ($10000 start of HiVRAM)
+	lda #L0_MAPBASE
+	sta VERA_L0_mapbase
+	; L1 = UI
+	; ($00000 start of LoVRAM)
+	stz VERA_L1_mapbase
 
-  ; Set the default character tiles
-  lda #TILEBASE
-  sta VERA_L0_tilebase
-  sta VERA_L1_tilebase
+	; Set the default character tiles
+	lda #TILEBASE
+	sta VERA_L0_tilebase
+	sta VERA_L1_tilebase
 
-  ; Turn on both layers
-  ; Field : Sprit E : L1 E : L2 E : NC : Chroma/HV : Output x2
-  lda VERA_dc_video
-  ora #%00110000
-  sta VERA_dc_video
-    ; Clear pattern VRAM area
-  stz r1
-  lda #$80
-  sta r2
-  lda #%00000001 ; Hi RAM
-  jsr graphics::vera::clear_vram
+	; Turn on both layers
+	; Field : Sprit E : L1 E : L2 E : NC : Chroma/HV : Output x2
+	lda VERA_dc_video
+	ora #%00110000
+	sta VERA_dc_video
+		; Clear pattern VRAM area
+	stz r1
+	lda #$80
+	sta r2
+	lda #%00000001 ; Hi RAM
+	jsr graphics::vera::clear_vram
 
-  ; Clear pattern VRAM area
-  stz r1
-  lda #$80
-  sta r2
-  lda #%00000000 ; Lo RAM
-  jsr graphics::vera::clear_vram
+	; Clear pattern VRAM area
+	stz r1
+	lda #$80
+	sta r2
+	lda #%00000000 ; Lo RAM
+	jsr graphics::vera::clear_vram
 
-  lda #%00010000
-  sta VERA_addr_high
-
-
-  ; Set Baud
-  ; Enable Divisor Latch
-  lda #%10000000
-  sta LINE_CONTROL
-  lda #MIDI_BAUD_DIV_LO
-  sta DIVISOR_LATCH_LOW
-  lda #MIDI_BAUD_DIV_HI
-  sta DIVISOR_LATCH_HI
-
-  ; Setup
-  lda #FIFO_SETUP
-  sta FIFO_CONTROL
-
-  ; Disable Divisor Latch & Set word length
-  lda #LCR_SETUP
-  sta LINE_CONTROL
-
-  stz MODEM_CONTROL
-
-  lda #INTR_SETUP
-  sta INTERRUPT_ENABLE
+	lda #%00010000
+	sta VERA_addr_high
 
 
-  lda #$BF
-  sta zp_TEXT_COLOR
+	; Set Baud
+	; Enable Divisor Latch
+	lda #%10000000
+	sta LINE_CONTROL
+	lda #MIDI_BAUD_DIV_LO
+	sta DIVISOR_LATCH_LOW
+	lda #MIDI_BAUD_DIV_HI
+	sta DIVISOR_LATCH_HI
 
-  lda #$05
-  ldy #$05
-  jsr graphics::drawing::goto_xy
+	; Setup
+	lda #FIFO_SETUP
+	sta FIFO_CONTROL
 
-  ; Setup display
-  print_string_macro scratch_string, #$09, #$00, #$05, #$BF
-  print_string_macro modem_string, #$07, #$00, #$06, #$BF
-  print_string_macro interruptr_string, #$06, #$00, #$07, #$BF
-  print_string_macro line_string, #$16, #$00, #$08, #$BF
-  print_string_macro received_string, #$0A, #$00, #$09, #$BF
+	; Disable Divisor Latch & Set word length
+	lda #LCR_SETUP
+	sta LINE_CONTROL
+
+	stz MODEM_CONTROL
+
+	lda #INTR_SETUP
+	sta INTERRUPT_ENABLE
 
 
-  ; Scratch (test)
-  lda #$55
-  sta SCRATCH
+	lda #$BF
+	sta zp_TEXT_COLOR
 
-  lda #$18
-  ldy #$05
-  jsr graphics::drawing::goto_xy
-  lda SCRATCH
-  jsr graphics::drawing::print_hex
+	; Setup display
+	print_string_macro scratch_string, #$09, #$00, #$05, #$BF
+	print_string_macro modem_string, #$07, #$00, #$06, #$BF
+	print_string_macro interruptr_string, #$06, #$00, #$07, #$BF
+	print_string_macro line_string, #$16, #$00, #$08, #$BF
+	print_string_macro received_string, #$0A, #$00, #$09, #$BF
 
+
+	;; Scratch
+	; This writes a value to the scratch registers and then reads it back
+	; Helps to make sure the card is connected and seemingly working.
+	lda #$55
+	sta SCRATCH
+	lda #$18
+	ldy #$05
+	jsr graphics::drawing::goto_xy
+	lda SCRATCH
+	jsr graphics::drawing::print_hex
+
+;; Infinite Read Loop
 @read:
-  ; Just testing some shit out
-  ; (MIDI clock out)
-  ;lda #$F8
-  ;sta TX_HOLDING
-  ; (This worked)
+	;; Spam the MIDI Clock, $F8, to MIDI Out
+	;lda #$F8
+	;sta TX_HOLDING
 
-  lda #$18
-  ldy #$06
-  jsr graphics::drawing::goto_xy
-  lda MODEM_STATUS
-  jsr graphics::drawing::print_hex
+	lda #$18
+	ldy #$06
+	jsr graphics::drawing::goto_xy
+	lda MODEM_STATUS
+	jsr graphics::drawing::print_hex
 
-  lda #$18
-  ldy #$07
-  jsr graphics::drawing::goto_xy
-  lda INTERRUPT_IDENT
-  jsr graphics::drawing::print_hex
+	lda #$18
+	ldy #$07
+	jsr graphics::drawing::goto_xy
+	lda INTERRUPT_IDENT
+	jsr graphics::drawing::print_hex
 
+	lda #$18
+	ldy #$08
+	jsr graphics::drawing::goto_xy
+	lda LINE_STATUS
+	jsr graphics::drawing::print_hex
 
-  lda #$18
-  ldy #$08
-  jsr graphics::drawing::goto_xy
-  lda LINE_STATUS
-  jsr graphics::drawing::print_hex
-
-  lda #$18
-  ldy #$09
-  jsr graphics::drawing::goto_xy
-  lda RX_BUFFER
-  jsr graphics::drawing::print_hex
-  jmp @read
+	lda #$18
+	ldy #$09
+	jsr graphics::drawing::goto_xy
+	lda RX_BUFFER
+	jsr graphics::drawing::print_hex
+	jmp @read
 @end:
-  rts
+	rts
 
 scratch_string: .byte "scratch: "
 modem_string: .byte "modem: "
