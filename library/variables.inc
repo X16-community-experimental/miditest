@@ -1,0 +1,186 @@
+; Sets X16 compatibility mode
+; Only one should be enabled
+; X16_816_FULL = Full 65816 support (assuming ROM/Emu fixes)
+; X16_816_NO_ROM_FIX = Limited 65816 support (no interrupts)
+; X16_C02 = 8-bit only mode
+.DEFINE X16_816_FULL 0
+.DEFINE X16_C02 1
+
+P_MEMORY = %00100000
+P_INDEX  = %00010000
+P_MEMORY_AND_INDEX = %00110000
+
+; Variables
+; VERA Settings
+VBLANK_AND_AFLOW_MASK = %00001001
+VBLANK_MASK    = %00000001
+RES128x64x256  = %01101000
+RES128x128x256 = %10101000
+RES128x256x16  = %10111000
+RES128x64x16   = %01100000
+RES128x128x16  = %10100000
+RES256x64x16   = %01110000
+
+; CMR-DOS
+COMMAND_FILE_NUMBER = $0F ; 15
+SECONDARY_ADDRESS_DOS_COMMAND = $0F ; 15
+SECONDARY_ADDRESS_OPEN_FOR_WRITE = $01
+SECONDARY_ADDRESS_RANDOM_IO = $02
+
+; Other stuff
+DISPLAY_END_X = $4F
+DISPLAY_END_Y = $3B
+L0_MAPBASE = %10000000
+L1_MAPBASE = %00000000
+TILEBASE = $F8  ; Default
+; Kernel Settings
+ISR_HANDLER = $0314
+
+; Constants
+SCREEN_X     = $A0    ; 80 * 2 (char + color)
+SCREEN_Y     = $3C      ; 60
+; For mouse
+SCREEN_RESOLUTION_X = $50 ; 640
+SCREEN_RESOLUTION_Y = $3C ; 480
+
+;; Colors
+HEADER_BACKGROUND_COLOR = $B0
+FRAME_COLOR = $B1
+TITLE_COLORS = $BF
+TEXT_COLORS = $BE
+EDITABLE_TEXT_COLORS = $C1
+PATTERN_ROW_NUMBER_COLOR = $01    ; Foreground Only
+PATTERN_BLOCK_HIGHLIGHT_COLOR = $A0
+PATTERN_NOTE_COLOR = $01
+PATTERN_INST_COLOR = $0F
+PATTERN_VOL_COLOR = $0E
+;PATTERN_EFX_COLOR = $06
+PATTERN_EFX_COLOR = $03
+PLAYBACK_MARKER_COLOR = $01
+;;; Background
+PATTERN_BACKGROUND_COLOR = $00  ; background only (top nibble)
+MAJOR_HIGHLIGHT_COLOR = $C0     ; background only
+MINOR_HIGHLIGHT_COLOR = $90     ; background only
+CURRENT_ROW_BACKGROUND_COLOR = $40 ; background only
+
+; Scroll offset to send to VERA to start the pattern in the middle
+; of the window. Here we are using a negative number.
+PATTERN_SCROLL_START_H = $FF
+PATTERN_SCROLL_START_L = $00
+
+; Position the pattern so it's at the top of the pattern UI
+; This is for when not scrolling, or when editing a pattern
+STATIC_PATTERN_SCROLL_H = $FF
+STATIC_PATTERN_SCROLL_L = $B0
+
+CHARACTER_SCROLL = $08
+
+; Start at 0, so 0-24 (25 total)
+NUMBER_OF_CHANNELS = $18
+TOTAL_BYTES_PER_PATTERN = $1F40    ; currently 5 bytes * 25 channels * 64 rows, 8000 bytes
+TOTAL_PATTERN_SIZE_HIGH = $1F
+TOTAL_PATTERN_SIZE_LOW = $40
+TOTAL_BYTES_PER_ROW = $7D          ; total bytes per row (for skipping rows), 5*25
+TOTAL_BYTES_PER_CHANNEL = $05
+
+
+
+
+; Pattern constants
+MAX_PATTERN = $DF
+PAGE_ADDRESS = $A000
+PATTERN_ADDRESS = PAGE_ADDRESS
+BANK_ADDRESS = $A000
+BANK_ADDRESS_TOP = $A0
+BRAM_PAGE_SIZE = $2000
+BRAM_PAGE_SIZE_TOP = $20
+
+VERA_PSG_CHANNEL_BASE_LOW_BYTE = $C0
+VERA_PSG_LOW_FREQ_REGISTER = $00
+VERA_PSG_HIGH_FREQ_REGISTER = $01
+VERA_PSG_VOLUME_REGISTER = $02
+VERA_PSG_WAVE_REGISTER = $03
+
+; $06000 technically
+VRAM_COPY_BUFFER_ADDRESS_HIGH = $60
+
+ROW_MAX = $40               ; Max # of rows for a row
+ROW_MAJOR = $10             ; Every 16 rows
+ROW_MINOR = $04             ; Every 4 rows
+
+; Place to start the orders list
+ORDER_LIST_X = $20
+ORDER_LIST_Y = $0A
+; How many characters over the patterns are
+ORDER_LIST_OFFSET = $08
+MAX_ORDERS = $FF
+
+; Row statuses
+NOTEREL  = $FD
+NOTEOFF  = $FE
+NOTENULL = $FF
+VOLNULL  = $FF
+INSTNULL = $FF
+EFFNULL = $FF
+
+
+VOLUME_COLUMN_MAX_VOL = $3F
+VOLUME_COLUMN_ATT_START_RANGE = $40
+VOLUME_COLUMN_PWM_START_RANGE = $80
+VOLUME_COLUMN_EFFECT_FLAGS_START_RANGE = $C0
+VOLUME_COLUMN_PAN_CENTER = $C0
+VOLUME_COLUMN_PAN_LEFT = $C1
+VOLUME_COLUMN_PAN_RIGHT = $C2
+VOLUME_COLUMN_SET_WAVE_PWM = $C3
+VOLUME_COLUMN_SET_WAVE_SAW = $C4
+VOLUME_COLUMN_SET_WAVE_TRI = $C5
+VOLUME_COLUMN_SET_WAVE_NOISE = $C6
+
+; Waveform Bits
+PULSE_TYPE = $00
+SAW_TYPE = $40
+TRI_TYPE = $80
+NOISE_TYPE = $C0
+
+
+; How many values an Octave is
+OCTAVE = $0C  ; 12
+
+; Max allowable octave
+MAX_OCTAVE = $0A
+
+; States
+STOP_STATE = $00
+PLAY_SONG_STATE = $01
+PLAY_PATTERN_STATE = $02
+
+; File Info
+; 00 = Before adding FM channels
+; 01 = Removal of 2-byte OS header, FM channels, plus off-by-one fixes
+; 02 = Switching to storing full misc bank (for title, sample names, etc.)
+;      Sample pages (8k for now)
+SONG_FILE_VERSION = $02
+
+
+
+
+; Lengths of things
+SONG_TITLE_MAX_LENGTH = $20
+COMPOSER_MAX_LENGTH = $20
+; Including "@:"
+FILENAME_MAX_LENGTH = $11
+
+
+; Jump Table Constants
+; 65C02 way (powers of 2, 128 entry table)
+HELP_MODULE = $00
+VERA_INSTRUMENTS_MODULE = $02
+PLAY_SONG_MODULE = $04
+EDIT_PATTERN_MODULE = $06
+FILE_MODULE = $08
+ORDERS_MODULE = $0A
+TABLES_MODULE = $0C
+ENVELOPES_MODULE = $0E
+SAMPLES_MODULE = $10
+FM_INSTRUMENTS_MODULE = $12
+SONG_OPTIONS_MODULE = $14
