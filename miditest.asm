@@ -6,6 +6,7 @@
 .include "library/variables.inc"
 .include "library/macros.inc"
 .include "library/graphics/main.asm"
+.include "library/files/main.asm"
 
 ; The MIDI IO base, which depends on the IO and Hi/Lo jumper settings on the card.
 ; Base address is silkscreen on the card.
@@ -62,7 +63,14 @@ FIFO_SETUP = %00000111
 MIDI_BAUD_DIV_LO = $25
 MIDI_BAUD_DIV_HI = $00
 
+;; Scratch Register Test Value
+SCRATCH_TEST_VALUE = $23
+
+
 ;; Display code (lifted from Dreamtracker's setup)
+FILE_FILENAME:
+    .byte "scr/main.scr"
+FILE_FILENAME_LENGTH = $0C
 
 cursor_old_color: .byte $00
 cursor_x: .byte $00
@@ -70,22 +78,22 @@ cursor_y: .byte $00
 cursor_layer: .byte $00
 
 palette:
-.byte $04,$00     ; super dark blue
-.byte $FF,$0F     ; white
-.byte $00,$0F     ; red
-.byte $4F,$04     ; cyan
-.byte $04,$0A     ; purple
-.byte $40,$00     ; dark green
-.byte $0F,$00     ; blue
-.byte $F0,$0F     ; yellow
-.byte $50,$0F     ; orange
-.byte $30,$0A     ; brown
-.byte $55,$0F     ; light red
-.byte $22,$02     ; dark grey
-.byte $44,$04     ; grey
-.byte $F5,$05     ; light green
-.byte $9F,$0A     ; light blue
-.byte $88,$08     ; light gray
+.byte $04,$00     ; super dark blue 00
+.byte $FF,$0F     ; white 01
+.byte $00,$0F     ; red 02
+.byte $DF,$0D     ; cyan 03
+.byte $04,$0A     ; purple 04
+.byte $40,$00     ; dark green 05
+.byte $0F,$00     ; blue 06
+.byte $F0,$0F     ; yellow 07
+.byte $50,$0F     ; orange 08
+.byte $30,$0A     ; brown 09 
+.byte $55,$0F     ; light red 0A
+.byte $22,$02     ; dark grey 0B
+.byte $44,$04     ; grey 0C
+.byte $F5,$05     ; light green 0D
+.byte $9F,$0A     ; light blue 0E
+.byte $88,$08     ; light gray 0F
 
 ;; Setup screen and IO card
 start:
@@ -136,6 +144,12 @@ start:
 
   jsr graphics::vera::load_palette_16
 
+	lda #FILE_FILENAME_LENGTH
+	ldx #<FILE_FILENAME
+	ldy #>FILE_FILENAME
+	jsr files::load_to_vram
+
+
 
 	; Set Baud
 	; Enable Divisor Latch
@@ -159,19 +173,18 @@ start:
 	lda #INTR_SETUP
 	sta INTERRUPT_ENABLE
 
-	; Setup display
-	print_null_terminated_string_macro title_string, #$00, #$00, #$0E
-	print_null_terminated_string_macro scratch_string, #$00, #$05, #$0F
-	print_null_terminated_string_macro modem_string,#$00, #$06, #$0F
-	print_null_terminated_string_macro interruptr_string, #$00, #$07, #$0F
-	print_null_terminated_string_macro line_string, #$00, #$08, #$0F
-	print_null_terminated_string_macro received_string, #$00, #$09, #$0F
-
-
+	lda #$01
+	sta zp_TEXT_COLOR
 	;; Scratch
 	; This writes a value to the scratch registers and then reads it back
 	; Helps to make sure the card is connected and seemingly working.
-	lda #$55
+	lda #$18
+	ldy #$04
+	jsr graphics::drawing::goto_xy
+	lda #SCRATCH_TEST_VALUE
+	jsr graphics::drawing::print_hex
+
+	lda #SCRATCH_TEST_VALUE
 	sta SCRATCH
 	lda #$18
 	ldy #$05
