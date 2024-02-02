@@ -18,5 +18,9 @@
     .include "library/graphics/drawing/cursor.asm"
     .include "library/graphics/drawing/chars_to_number.asm"
   .endscope
+  
+  .scope ui
+    .include "library/graphics/ui/update_screen_values.asm"
+  .endscope
 
 .endscope

@@ -60,6 +60,7 @@ KEY_O = $4F
 
 KEY_P = $50
 KEY_Q = $51
+KEY_R = $52
 KEY_S = $53
 KEY_T = $54
 KEY_W = $57
@@ -76,6 +77,8 @@ KEY_8 = $38
 KEY_9 = $39
 KEY_MINUS = $2D
 KEY_EQUALS = $3D
+KEY_BRACKET_LEFT = $5B
+KEY_BRACKET_RIGHT = $5D
 
 
 

@@ -1,16 +1,28 @@
 .zeropage
 
+; The IO Address range for MIDI
+zp_MIDI_IO_BASE: .word $0000
+
+; Value to set UART divisor baud rate
+zp_BAUD_RATE: .word $0000
+
+; Value to write to UART scratch register
+zp_SCRATCH_VALUE: .byte 0
+
 ; Color of text for drawing things
 zp_TEXT_COLOR: .byte 0
 
 ; Keyboard input from user
 zp_KEY_PRESSED: .byte 0
 
+; Settings toggles
 zp_MIDI_OUT_TOGGLE: .byte 0
 zp_INTTERUPTS_TOGGLE: .byte 0
 zp_FIFO_TOGGLE: .byte 0
+zp_READ_LOOP_TOGGLE: .byte 0
 
 zp_FIFO_SHADOW: .byte 0
+zp_RX_BUFFER_SHADOW: .byte 0
 
 ; Our own temporary variables
 ; Function call arguments

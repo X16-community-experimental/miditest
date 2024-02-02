@@ -12,6 +12,7 @@
 ; The MIDI IO base, which depends on the IO and Hi/Lo jumper settings on the card.
 ; Base address is silkscreen on the card.
 MIDI_IO_BASE=$9F68
+
 RX_BUFFER=MIDI_IO_BASE           ; Read Only
 TX_HOLDING=MIDI_IO_BASE          ; Write Only
 INTERRUPT_ENABLE=MIDI_IO_BASE + 1
@@ -61,8 +62,7 @@ FIFO_SETUP = %00000111
 ; Crystal In Hz								: 18432000
 ; Divisor 										: Hz / (MIDI Baud * 16)														
 ; Result: 										: 37, or $25
-MIDI_BAUD_DIV_LO = $25
-MIDI_BAUD_DIV_HI = $00
+MIDI_BAUD_RATE_DIVISOR = $0025
 
 ;; Scratch Register Test Value
 SCRATCH_TEST_VALUE = $23
@@ -150,60 +150,45 @@ start:
 	ldy #>FILE_FILENAME
 	jsr files::load_to_vram
 
-	; Set Baud
-	; Enable Divisor Latch
-	lda #%10000000
-	sta LINE_CONTROL
-	lda #MIDI_BAUD_DIV_LO
-	sta DIVISOR_LATCH_LOW
-	lda #MIDI_BAUD_DIV_HI
-	sta DIVISOR_LATCH_HI
+	;; Setup Toggles
+	; We start with the opposite value of what we want
+	; and call the toggle function so we get the results
+	; printed to screen
+	lda #$01
+	sta zp_MIDI_OUT_TOGGLE
+	sta zp_INTTERUPTS_TOGGLE
+	stz zp_FIFO_TOGGLE
+	stz zp_READ_LOOP_TOGGLE
+	jsr toggle_midi_out
+	jsr toggle_interrupts
+	jsr toggle_fifo
+	jsr toggle_read_loop
 
-	; Setup
+
+	;; UART Setup
+	; Set Default Baud
+	lda #<MIDI_BAUD_RATE_DIVISOR
+	sta zp_BAUD_RATE
+	lda #>MIDI_BAUD_RATE_DIVISOR
+	sta zp_BAUD_RATE + 1
+	jsr set_baud_rate
+
+	; Load scratch value
+	lda #SCRATCH_TEST_VALUE
+	sta zp_SCRATCH_VALUE
+	sta SCRATCH
 	lda #FIFO_SETUP
 	sta FIFO_CONTROL
 	sta zp_FIFO_SHADOW
-
-	; Disable Divisor Latch & Set word length
-	lda #LCR_SETUP
-	sta LINE_CONTROL
-
 	stz MODEM_CONTROL
-
 	lda #INTR_SETUP
 	sta INTERRUPT_ENABLE
 
 	lda #$01
 	sta zp_TEXT_COLOR
-	;; Scratch
-	; This writes a value to the scratch registers and then reads it back
-	; Helps to make sure the card is connected and seemingly working.
-	lda #$18
-	ldy #$04
-	jsr graphics::drawing::goto_xy
-	lda #SCRATCH_TEST_VALUE
-	jsr graphics::drawing::print_hex
-	lda #$1B
-	ldy #$04
-	jsr graphics::drawing::goto_xy
-	lda #SCRATCH_TEST_VALUE
-	jsr graphics::drawing::print_binary
-
-	lda #SCRATCH_TEST_VALUE
-	sta SCRATCH
-	lda #$18
-	ldy #$05
-	jsr graphics::drawing::goto_xy
-	lda SCRATCH
-	jsr graphics::drawing::print_hex
-	lda #$1B
-	ldy #$05
-	jsr graphics::drawing::goto_xy
-	lda SCRATCH
-	jsr graphics::drawing::print_binary
 
 ;; Infinite Read Loop
-@read:
+@loop:
   jsr GETIN  ;keyboard
   beq @continue
   sta zp_KEY_PRESSED
@@ -211,14 +196,22 @@ start:
 	cmp #KEY_O
 	bne @interrupts_toggle
 	jsr toggle_midi_out
+	jmp @continue
 @interrupts_toggle:
 	cmp #KEY_I
-	bne @fifo_toggle
+	bne @read_loop_toggle
 	jsr toggle_interrupts
+	jmp @continue
+@read_loop_toggle:
+	cmp #KEY_R
+	bne @fifo_toggle
+	jsr toggle_read_loop
+	jmp @continue
 @fifo_toggle:
 	cmp #KEY_F
 	bne @fifo_buffer_1
 	jsr toggle_fifo
+	jmp @continue
 @fifo_buffer_1:
 	cmp #KEY_1
 	bne @fifo_buffer_4
@@ -233,13 +226,22 @@ start:
 	jmp @fifo_buffer_jump_8
 @fifo_buffer_e:
 	cmp #KEY_E
-	bne @quit
+	bne @decrease_base_div
 	jmp @fifo_buffer_jump_e
+@decrease_base_div:
+	cmp #KEY_BRACKET_LEFT
+	bne @increase_base_div
+	jmp @decrease_base_div_jump
+@increase_base_div:
+	cmp #KEY_BRACKET_RIGHT
+	bne @quit
+	jmp @increase_base_div_jump
 @quit:
 	cmp #KEY_Q
 	bne @continue
 	jmp exit
 
+; Jumps due to 6502 page size
 @fifo_buffer_jump_1:
 	jsr set_fifo_buffer_to_1
 	jmp @continue
@@ -251,89 +253,29 @@ start:
 	jmp @continue
 @fifo_buffer_jump_e:
 	jsr set_fifo_buffer_to_e
+	jmp @continue
+@decrease_base_div_jump:
+	jsr decrease_base_divisor
+	jmp @continue
+@increase_base_div_jump:
+	jsr increase_base_divisor
 
 @continue:
 @spam_midi:
 	lda zp_MIDI_OUT_TOGGLE
-	beq @modem_status
+	beq @read_buffer
 	;; Spam the MIDI Clock, $F8, to MIDI Out
 	lda #$F8
 	sta TX_HOLDING
-
-@modem_status:
-	lda #$18
-	ldy #$06
-	jsr graphics::drawing::goto_xy
-	lda MODEM_STATUS
-	pha
-	jsr graphics::drawing::print_hex
-	lda #$1B
-	ldy #$06
-	jsr graphics::drawing::goto_xy
-	pla
-	jsr graphics::drawing::print_binary
-
-	lda #$18
-	ldy #$07
-	jsr graphics::drawing::goto_xy
-	lda zp_FIFO_SHADOW
-	pha
-	jsr graphics::drawing::print_hex
-	lda #$1B
-	ldy #$07
-	jsr graphics::drawing::goto_xy
-	pla
-	jsr graphics::drawing::print_binary
-
-
-	lda #$18
-	ldy #$08
-	jsr graphics::drawing::goto_xy
-	lda INTERRUPT_ENABLE
-	pha
-	jsr graphics::drawing::print_hex
-	lda #$1B
-	ldy #$08
-	jsr graphics::drawing::goto_xy
-	pla
-	jsr graphics::drawing::print_binary
-
-	lda #$18
-	ldy #$09
-	jsr graphics::drawing::goto_xy
-	lda INTERRUPT_IDENT
-	pha
-	jsr graphics::drawing::print_hex
-	lda #$1B
-	ldy #$09
-	jsr graphics::drawing::goto_xy
-	pla
-	jsr graphics::drawing::print_binary
-
-	lda #$18
-	ldy #$0A
-	jsr graphics::drawing::goto_xy
-	lda LINE_STATUS
-	pha
-	jsr graphics::drawing::print_hex
-	lda #$1B
-	ldy #$0A
-	jsr graphics::drawing::goto_xy
-	pla
-	jsr graphics::drawing::print_binary
-
-	lda #$18
-	ldy #$0B
-	jsr graphics::drawing::goto_xy
+@read_buffer:
+	lda zp_READ_LOOP_TOGGLE
+	beq @update_screen
 	lda RX_BUFFER
-	pha
-	jsr graphics::drawing::print_hex
-	lda #$1B
-	ldy #$0B
-	jsr graphics::drawing::goto_xy
-	pla
-	jsr graphics::drawing::print_binary
-	jmp @read
+	sta zp_RX_BUFFER_SHADOW
+@update_screen:
+	jsr graphics::ui::update_screen_values
+@loop_end:
+	jmp @loop
 
 ; Exit the program
 exit:
@@ -376,6 +318,19 @@ exit:
 	rts
 .endproc 
 
+.proc toggle_read_loop
+	lda zp_READ_LOOP_TOGGLE
+	beq @turn_on
+@turn_off:
+	stz zp_READ_LOOP_TOGGLE
+	print_null_terminated_string_macro off_string, #$46, #$06, #$01
+	rts
+@turn_on:
+	inc zp_READ_LOOP_TOGGLE
+	print_null_terminated_string_macro on_string, #$46, #$06, #$01
+	rts
+.endproc 
+
 .proc toggle_fifo
 	lda zp_FIFO_TOGGLE
 	beq @turn_on
@@ -385,7 +340,7 @@ exit:
 	and #%11111110
 	sta zp_FIFO_SHADOW
 	sta FIFO_CONTROL
-	print_null_terminated_string_macro off_string, #$46, #$06, #$01
+	print_null_terminated_string_macro off_string, #$46, #$07, #$01
 	rts
 @turn_on:
 	inc zp_FIFO_TOGGLE
@@ -393,10 +348,9 @@ exit:
 	ora #%00000001
 	sta zp_FIFO_SHADOW
 	sta FIFO_CONTROL
-	print_null_terminated_string_macro on_string, #$46, #$06, #$01
+	print_null_terminated_string_macro on_string, #$46, #$07, #$01
 	rts
 .endproc 
-
 
 .proc set_fifo_buffer_to_1
 	lda zp_FIFO_SHADOW
@@ -431,6 +385,34 @@ exit:
 	sta FIFO_CONTROL
 	rts
 .endproc 
+
+.proc increase_base_divisor
+	add16to8 zp_BAUD_RATE, #$1, zp_BAUD_RATE
+	jsr set_baud_rate
+	rts
+.endproc
+
+.proc decrease_base_divisor
+	sub16from8 zp_BAUD_RATE, #$1, zp_BAUD_RATE
+	jsr set_baud_rate
+	rts
+.endproc
+
+.proc set_baud_rate
+	; Enable Divisor Latch
+	lda #%10000000
+	sta LINE_CONTROL
+	lda zp_BAUD_RATE
+	sta DIVISOR_LATCH_LOW
+	lda zp_BAUD_RATE + 1
+	sta DIVISOR_LATCH_HI
+
+	; Disable Divisor Latch & Set word length
+	lda #LCR_SETUP
+	sta LINE_CONTROL
+	rts
+.endproc
+
 
 on_string: .byte "on ",0
 off_string: .byte "off",0
