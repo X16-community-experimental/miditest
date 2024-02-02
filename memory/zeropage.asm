@@ -6,6 +6,12 @@ zp_TEXT_COLOR: .byte 0
 ; Keyboard input from user
 zp_KEY_PRESSED: .byte 0
 
+zp_MIDI_OUT_TOGGLE: .byte 0
+zp_INTTERUPTS_TOGGLE: .byte 0
+zp_FIFO_TOGGLE: .byte 0
+
+zp_FIFO_SHADOW: .byte 0
+
 ; Our own temporary variables
 ; Function call arguments
 zp_ARG0: .word $00
@@ -49,10 +55,6 @@ zp_ADDR_RETURN: .word $0000
 
 .segment "EXTZP"
 
-; Bank Numbers
-;; Bank labels
-zp_BANK_TABLES: .byte $00 ; FM Instruments Page
-zp_BANK_FINS:   .byte $00 ; FM Instruments Page
-zp_BANK_VINS:   .byte $00 ; VERA Instruments Page
-zp_BANK_ENVS:   .byte $00 ; Envelopes
-zp_BANK_MISC:   .byte $00 ; Misc
+
+
+

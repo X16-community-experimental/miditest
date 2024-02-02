@@ -12,6 +12,7 @@
     .include "library/graphics/drawing/goto_xy.asm"
     .include "library/graphics/drawing/print_character.asm"
     .include "library/graphics/drawing/print_hex.asm"
+    .include "library/graphics/drawing/print_binary.asm"
     .include "library/graphics/drawing/print_alpha_char.asm"
     .include "library/graphics/drawing/print_string.asm"
     .include "library/graphics/drawing/cursor.asm"
