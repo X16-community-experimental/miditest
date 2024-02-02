@@ -70,7 +70,7 @@ cursor_y: .byte $00
 cursor_layer: .byte $00
 
 palette:
-.byte $02,$00     ; super dark blue
+.byte $04,$00     ; super dark blue
 .byte $FF,$0F     ; white
 .byte $00,$0F     ; red
 .byte $4F,$04     ; cyan
@@ -134,6 +134,8 @@ start:
 	lda #%00010000
 	sta VERA_addr_high
 
+  jsr graphics::vera::load_palette_16
+
 
 	; Set Baud
 	; Enable Divisor Latch
@@ -157,16 +159,13 @@ start:
 	lda #INTR_SETUP
 	sta INTERRUPT_ENABLE
 
-
-	lda #$BF
-	sta zp_TEXT_COLOR
-
 	; Setup display
-	print_string_macro scratch_string, #$09, #$00, #$05, #$BF
-	print_string_macro modem_string, #$07, #$00, #$06, #$BF
-	print_string_macro interruptr_string, #$06, #$00, #$07, #$BF
-	print_string_macro line_string, #$16, #$00, #$08, #$BF
-	print_string_macro received_string, #$0A, #$00, #$09, #$BF
+	print_null_terminated_string_macro title_string, #$00, #$00, #$0E
+	print_null_terminated_string_macro scratch_string, #$00, #$05, #$0F
+	print_null_terminated_string_macro modem_string,#$00, #$06, #$0F
+	print_null_terminated_string_macro interruptr_string, #$00, #$07, #$0F
+	print_null_terminated_string_macro line_string, #$00, #$08, #$0F
+	print_null_terminated_string_macro received_string, #$00, #$09, #$0F
 
 
 	;; Scratch
@@ -213,9 +212,12 @@ start:
 @end:
 	rts
 
-scratch_string: .byte "scratch: "
-modem_string: .byte "modem: "
-interruptr_string: .byte "intr: "
-line_string: .byte "line status register: "
-received_string: .byte "received: "
+title_string: 
+	.byte "tim's awful midi tester, v0.infinity",$FF
+	.byte "------------------------------------",$00
+scratch_string: .byte "scratch: ",$00
+modem_string: .byte "modem: ",$00
+interruptr_string: .byte "intr: ",$00
+line_string: .byte "line status register: ",$00
+received_string: .byte "received: ",$00
 

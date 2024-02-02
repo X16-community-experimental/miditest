@@ -62,3 +62,6 @@ SCREENCODE_VU_FULL = $A0
 
 ; Special value we will use to denote return in screencode strings
 SCREENCODE_RETURN = $FF
+
+; Special value for null terminated strings
+SCREENCODE_NULL = $00

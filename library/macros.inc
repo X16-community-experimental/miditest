@@ -14,6 +14,20 @@
   jsr graphics::drawing::print_string
 .endmacro
 
+.macro print_null_terminated_string_macro msg, xpos, ypos, color
+  lda #<msg
+  sta zp_ARG0
+  lda #>msg
+  sta zp_ARG0+1
+  lda xpos
+  sta zp_ARG2
+  lda ypos
+  sta zp_ARG3
+  lda color
+  sta zp_TEXT_COLOR
+  jsr graphics::drawing::print_null_terminated_string
+.endmacro
+
 .macro vera_stride stride
   pha
   lda VERA_addr_high
