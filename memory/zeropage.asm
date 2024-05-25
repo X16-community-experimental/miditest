@@ -20,9 +20,11 @@ zp_MIDI_OUT_TOGGLE: .byte 0
 zp_INTTERUPTS_TOGGLE: .byte 0
 zp_FIFO_TOGGLE: .byte 0
 zp_READ_LOOP_TOGGLE: .byte 0
+zp_ECHOBACK_TOGGLE: .byte 0
 
 zp_FIFO_SHADOW: .byte 0
 zp_RX_BUFFER_SHADOW: .byte 0
+zp_ECHO_BYTE: .byte 0
 
 ; Our own temporary variables
 ; Function call arguments

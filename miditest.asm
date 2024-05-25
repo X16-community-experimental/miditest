@@ -11,7 +11,12 @@
 
 ; The MIDI IO base, which depends on the IO and Hi/Lo jumper settings on the card.
 ; Base address is silkscreen on the card.
-MIDI_IO_BASE=$9F68
+MIDI_IO_BASE=$9F60
+; Testing 9-pin
+;MIDI_IO_BASE=$9F60
+;MIDI_IO_BASE=$9FE0
+;MIDI_IO_BASE=$9F80
+;MIDI_IO_BASE=$9FE0
 
 RX_BUFFER=MIDI_IO_BASE           ; Read Only
 TX_HOLDING=MIDI_IO_BASE          ; Write Only
@@ -45,7 +50,7 @@ LCR_SETUP  = %00000011
 ; Bit 2				: 1 = Enable Receiver Line Status Intterupt
 ; Bit 1				: 1 = Enable THRE (Transmission Holding Register) Interrupt
 ; Bit 0				: 1 = Enable Received Data Available Interrupt
-INTR_SETUP = %00000000
+INTR_SETUP = %00000001
 
 ;; FIFO Control Register Flags
 ; Bits 7-6		: Buffer size (00 = $01, 01 = $04, 10 = $08, 11 = $0E)
@@ -62,10 +67,19 @@ FIFO_SETUP = %00000111
 ; Crystal In Hz								: 18432000
 ; Divisor 										: Hz / (MIDI Baud * 16)														
 ; Result: 										: 37, or $25
-MIDI_BAUD_RATE_DIVISOR = $0025
+
+;MIDI_BAUD_RATE_DIVISOR = $0025
+; 9600 (for testing 9-pin RS232)
+;MIDI_BAUD_RATE_DIVISOR = $0079
+; 2400
+; MIDI_BAUD_RATE_DIVISOR = $01E0
+; 9600 (for testing 9-pin RS232)
+;MIDI_BAUD_RATE_DIVISOR = $0079
+; For Kevin's new MIDI card, which uses a different crystal
+MIDI_BAUD_RATE_DIVISOR = $0020
 
 ;; Scratch Register Test Value
-SCRATCH_TEST_VALUE = $23
+SCRATCH_TEST_VALUE = $2F
 
 
 ;; Display code (lifted from Dreamtracker's setup)
@@ -163,7 +177,7 @@ start:
 	jsr toggle_interrupts
 	jsr toggle_fifo
 	jsr toggle_read_loop
-
+	jsr toggle_echoback
 
 	;; UART Setup
 	; Set Default Baud
@@ -190,7 +204,8 @@ start:
 ;; Infinite Read Loop
 @loop:
   jsr GETIN  ;keyboard
-  beq @continue
+  bne @midi_spam_toggle
+	jmp @continue
   sta zp_KEY_PRESSED
 @midi_spam_toggle:
 	cmp #KEY_O
@@ -204,8 +219,13 @@ start:
 	jmp @continue
 @read_loop_toggle:
 	cmp #KEY_R
-	bne @fifo_toggle
+	bne @echoback_toggle
 	jsr toggle_read_loop
+	jmp @continue
+@echoback_toggle:
+	cmp #KEY_B
+	bne @fifo_toggle
+	jsr toggle_echoback
 	jmp @continue
 @fifo_toggle:
 	cmp #KEY_F
@@ -263,10 +283,14 @@ start:
 @continue:
 @spam_midi:
 	lda zp_MIDI_OUT_TOGGLE
-	beq @read_buffer
+	beq @echoback
 	;; Spam the MIDI Clock, $F8, to MIDI Out
 	lda #$F8
 	sta TX_HOLDING
+@echoback:
+	lda zp_ECHOBACK_TOGGLE
+	beq @read_buffer
+	jsr echoback
 @read_buffer:
 	lda zp_READ_LOOP_TOGGLE
 	beq @update_screen
@@ -312,7 +336,9 @@ exit:
 	rts
 @turn_on:
 	inc zp_INTTERUPTS_TOGGLE
-	lda #%00000111
+	;lda #%00000111
+	; Just enable read interrupt
+	lda #INTR_SETUP
 	sta INTERRUPT_ENABLE
 	print_null_terminated_string_macro on_string, #$46, #$05, #$01
 	rts
@@ -331,6 +357,19 @@ exit:
 	rts
 .endproc 
 
+.proc toggle_echoback
+	lda zp_ECHOBACK_TOGGLE
+	beq @turn_on
+@turn_off:
+	stz zp_ECHOBACK_TOGGLE
+	print_null_terminated_string_macro off_string, #$46, #$07, #$01
+	rts
+@turn_on:
+	inc zp_ECHOBACK_TOGGLE
+	print_null_terminated_string_macro on_string, #$46, #$07, #$01
+	rts
+.endproc 
+
 .proc toggle_fifo
 	lda zp_FIFO_TOGGLE
 	beq @turn_on
@@ -340,7 +379,7 @@ exit:
 	and #%11111110
 	sta zp_FIFO_SHADOW
 	sta FIFO_CONTROL
-	print_null_terminated_string_macro off_string, #$46, #$07, #$01
+	print_null_terminated_string_macro off_string, #$46, #$08, #$01
 	rts
 @turn_on:
 	inc zp_FIFO_TOGGLE
@@ -348,7 +387,7 @@ exit:
 	ora #%00000001
 	sta zp_FIFO_SHADOW
 	sta FIFO_CONTROL
-	print_null_terminated_string_macro on_string, #$46, #$07, #$01
+	print_null_terminated_string_macro on_string, #$46, #$08, #$01
 	rts
 .endproc 
 
@@ -413,6 +452,18 @@ exit:
 	rts
 .endproc
 
+.proc echoback
+	lda INTERRUPT_IDENT
+	and #%00000001
+	beq @read
+	rts
+@read:
+	lda RX_BUFFER
+	sta TX_HOLDING
+	rts
+.endproc
+
 
 on_string: .byte "on ",0
 off_string: .byte "off",0
+
