@@ -1,5 +1,8 @@
 .zeropage
 
+; Previous ISR
+PREVIOUS_ISR: .word $0000
+
 ; The IO Address range for MIDI
 zp_MIDI_IO_BASE: .word $0000
 

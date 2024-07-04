@@ -50,7 +50,6 @@ LCR_SETUP  = %00000011
 ; Bit 2				: 1 = Enable Receiver Line Status Intterupt
 ; Bit 1				: 1 = Enable THRE (Transmission Holding Register) Interrupt
 ; Bit 0				: 1 = Enable Received Data Available Interrupt
-;INTR_SETUP = %00000101
 INTR_SETUP = %00000001
 
 ;; FIFO Control Register Flags
@@ -90,6 +89,12 @@ SCRATCH_TEST_VALUE = $2F
 ; MIDI Values
 
 MIDI_CLOCK = $F8
+
+
+;; Display code (lifted from Dreamtracker's setup)
+FILE_FILENAME:
+    .byte "scr/main.scr"
+FILE_FILENAME_LENGTH = $0C
 
 cursor_old_color: .byte $00
 cursor_x: .byte $00
@@ -163,8 +168,25 @@ start:
 
   jsr graphics::vera::load_palette_16
 
-	; Setup our MIDI clock interrupt
-	jsr enable_clock_irq
+	lda #FILE_FILENAME_LENGTH
+	ldx #<FILE_FILENAME
+	ldy #>FILE_FILENAME
+	jsr files::load_to_vram
+
+	;; Setup Toggles
+	; We start with the opposite value of what we want
+	; and call the toggle function so we get the results
+	; printed to screen
+	lda #$01
+	sta zp_MIDI_OUT_TOGGLE
+	sta zp_INTTERUPTS_TOGGLE
+	stz zp_FIFO_TOGGLE
+	stz zp_READ_LOOP_TOGGLE
+	jsr toggle_midi_out
+	jsr toggle_interrupts
+	jsr toggle_fifo
+	jsr toggle_read_loop
+	jsr toggle_echoback
 
 	;; UART Setup
 	; Set Default Baud
@@ -178,14 +200,10 @@ start:
 	lda #SCRATCH_TEST_VALUE
 	sta zp_SCRATCH_VALUE
 	sta SCRATCH
-
-	; Setup FIFO
 	lda #FIFO_SETUP
 	sta FIFO_CONTROL
 	sta zp_FIFO_SHADOW
 	stz MODEM_CONTROL
-
-	; Setup Interrupts
 	lda #INTR_SETUP
 	sta INTERRUPT_ENABLE
 
@@ -193,44 +211,107 @@ start:
 	sta zp_TEXT_COLOR
 
 	lda #$10
-	ldy #$10
+	ldy #$11
 	jsr graphics::drawing::goto_xy
 
-	lda SCRATCH
-	jsr graphics::drawing::print_hex
-	
-	cli
 
 ;; Infinite Read Loop
 @loop:
   jsr GETIN  ;keyboard
-	beq @continue
-	sta zp_KEY_PRESSED
-@check_keys:
+  bne @midi_spam_toggle
+	jmp @continue
+  sta zp_KEY_PRESSED
+@midi_spam_toggle:
+	cmp #KEY_O
+	bne @interrupts_toggle
+	jsr toggle_midi_out
+	jmp @continue
+@interrupts_toggle:
+	cmp #KEY_I
+	bne @read_loop_toggle
+	jsr toggle_interrupts
+	jmp @continue
+@read_loop_toggle:
+	cmp #KEY_R
+	bne @echoback_toggle
+	jsr toggle_read_loop
+	jmp @continue
+@echoback_toggle:
+	cmp #KEY_B
+	bne @fifo_toggle
+	jsr toggle_echoback
+	jmp @continue
+@fifo_toggle:
+	cmp #KEY_F
+	bne @fifo_buffer_1
+	jsr toggle_fifo
+	jmp @continue
+@fifo_buffer_1:
+	cmp #KEY_1
+	bne @fifo_buffer_4
+	jmp @fifo_buffer_jump_1
+@fifo_buffer_4:
+	cmp #KEY_4
+	bne @fifo_buffer_8
+	jmp @fifo_buffer_jump_4
+@fifo_buffer_8:
+	cmp #KEY_8
+	bne @fifo_buffer_e
+	jmp @fifo_buffer_jump_8
+@fifo_buffer_e:
+	cmp #KEY_E
+	bne @decrease_base_div
+	jmp @fifo_buffer_jump_e
+@decrease_base_div:
+	cmp #KEY_BRACKET_LEFT
+	bne @increase_base_div
+	jmp @decrease_base_div_jump
+@increase_base_div:
+	cmp #KEY_BRACKET_RIGHT
+	bne @quit
+	jmp @increase_base_div_jump
 @quit:
 	cmp #KEY_Q
-	bne @a
-	jmp exit
-@a:
-	cmp #KEY_A
-	bne @i
-	jsr graphics::drawing::print_alpha_char
-	;lda #$69
-	;sta zp_TMP0
-@i:
-	cmp #KEY_I
 	bne @continue
-	lda INTERRUPT_IDENT
-	jsr graphics::drawing::print_hex
-	;lda #$69
-	;sta zp_TMP0
+	jmp exit
+
+; Jumps due to 6502 page size
+@fifo_buffer_jump_1:
+	jsr set_fifo_buffer_to_1
+	jmp @continue
+@fifo_buffer_jump_4:
+	jsr set_fifo_buffer_to_4
+	jmp @continue
+@fifo_buffer_jump_8:
+	jsr set_fifo_buffer_to_8
+	jmp @continue
+@fifo_buffer_jump_e:
+	jsr set_fifo_buffer_to_e
+	jmp @continue
+@decrease_base_div_jump:
+	jsr decrease_base_divisor
+	jmp @continue
+@increase_base_div_jump:
+	jsr increase_base_divisor
 
 @continue:
-	lda zp_TMP0
-	beq @loop_end
-@read_value:
-	jsr graphics::drawing::print_hex
-	stz zp_TMP0
+@spam_midi:
+	lda zp_MIDI_OUT_TOGGLE
+	beq @echoback
+	;; Spam the MIDI Clock, $F8, to MIDI Out
+	lda #$F8
+	sta TX_HOLDING
+@echoback:
+	lda zp_ECHOBACK_TOGGLE
+	beq @read_buffer
+	jsr echoback
+@read_buffer:
+	lda zp_READ_LOOP_TOGGLE
+	beq @update_screen
+	lda RX_BUFFER
+	sta zp_RX_BUFFER_SHADOW
+@update_screen:
+	jsr graphics::ui::update_screen_values
 @loop_end:
 	jmp @loop
 
@@ -246,7 +327,129 @@ exit:
   jmp i2c_write_byte ; power off the system
 
 
+.proc toggle_midi_out
+	lda zp_MIDI_OUT_TOGGLE
+	beq @turn_on
+@turn_off:
+	stz zp_MIDI_OUT_TOGGLE
+	print_null_terminated_string_macro off_string, #$46, #$04, #$01
+	rts
+@turn_on:
+	inc zp_MIDI_OUT_TOGGLE
+	print_null_terminated_string_macro on_string, #$46, #$04, #$01
+	rts
+.endproc
 
+.proc toggle_interrupts
+	lda zp_INTTERUPTS_TOGGLE
+	beq @turn_on
+@turn_off:
+	stz zp_INTTERUPTS_TOGGLE
+	stz INTERRUPT_ENABLE
+	print_null_terminated_string_macro off_string, #$46, #$05, #$01
+	rts
+@turn_on:
+	inc zp_INTTERUPTS_TOGGLE
+	;lda #%00000111
+	; Just enable read interrupt
+	lda #INTR_SETUP
+	sta INTERRUPT_ENABLE
+	print_null_terminated_string_macro on_string, #$46, #$05, #$01
+	rts
+.endproc 
+
+.proc toggle_read_loop
+	lda zp_READ_LOOP_TOGGLE
+	beq @turn_on
+@turn_off:
+	stz zp_READ_LOOP_TOGGLE
+	print_null_terminated_string_macro off_string, #$46, #$06, #$01
+	rts
+@turn_on:
+	inc zp_READ_LOOP_TOGGLE
+	print_null_terminated_string_macro on_string, #$46, #$06, #$01
+	rts
+.endproc 
+
+.proc toggle_echoback
+	lda zp_ECHOBACK_TOGGLE
+	beq @turn_on
+@turn_off:
+	stz zp_ECHOBACK_TOGGLE
+	print_null_terminated_string_macro off_string, #$46, #$07, #$01
+	rts
+@turn_on:
+	inc zp_ECHOBACK_TOGGLE
+	print_null_terminated_string_macro on_string, #$46, #$07, #$01
+	rts
+.endproc 
+
+.proc toggle_fifo
+	lda zp_FIFO_TOGGLE
+	beq @turn_on
+@turn_off:
+	stz zp_FIFO_TOGGLE
+	lda zp_FIFO_SHADOW
+	and #%11111110
+	sta zp_FIFO_SHADOW
+	sta FIFO_CONTROL
+	print_null_terminated_string_macro off_string, #$46, #$08, #$01
+	rts
+@turn_on:
+	inc zp_FIFO_TOGGLE
+	lda zp_FIFO_SHADOW
+	ora #%00000001
+	sta zp_FIFO_SHADOW
+	sta FIFO_CONTROL
+	print_null_terminated_string_macro on_string, #$46, #$08, #$01
+	rts
+.endproc 
+
+.proc set_fifo_buffer_to_1
+	lda zp_FIFO_SHADOW
+	and #%00111111
+	sta zp_FIFO_SHADOW
+	sta FIFO_CONTROL
+	rts
+.endproc 
+
+.proc set_fifo_buffer_to_4
+	lda zp_FIFO_SHADOW
+	and #%01111111
+	ora #%01000000
+	sta zp_FIFO_SHADOW
+	sta FIFO_CONTROL
+	rts
+.endproc 
+
+.proc set_fifo_buffer_to_8
+	lda zp_FIFO_SHADOW
+	and #%10111111
+	ora #%10000000
+	sta zp_FIFO_SHADOW
+	sta FIFO_CONTROL
+	rts
+.endproc 
+
+.proc set_fifo_buffer_to_e
+	lda zp_FIFO_SHADOW
+	ora #%11000000
+	sta zp_FIFO_SHADOW
+	sta FIFO_CONTROL
+	rts
+.endproc 
+
+.proc increase_base_divisor
+	add16to8 zp_BAUD_RATE, #$1, zp_BAUD_RATE
+	jsr set_baud_rate
+	rts
+.endproc
+
+.proc decrease_base_divisor
+	sub16from8 zp_BAUD_RATE, #$1, zp_BAUD_RATE
+	jsr set_baud_rate
+	rts
+.endproc
 
 .proc set_baud_rate
 	; Enable Divisor Latch
@@ -263,49 +466,16 @@ exit:
 	rts
 .endproc
 
-.proc enable_clock_irq
-  @enable_irq:
-    ; Setup irq handler
-    ; We load the address of our interrupt handler into a special memory
-    ;   location. Basically when an interrupt triggers, this is the
-    ;   routine the CPU will execute.
-    ldx #$00
-    lda ISR_HANDLER,x
-    sta PREVIOUS_ISR,x
-    lda #<clock_isr
-    sta ISR_HANDLER,x
-    inx
-    lda ISR_HANDLER,x
-    sta PREVIOUS_ISR,x
-    lda #>clock_isr
-    sta ISR_HANDLER,x
-  @end:
-    rts
-.endproc
-
-.proc clock_isr
-  push_state_disable_interrupts
-
-	;lda #SCREENCODE_B
-	;jsr graphics::drawing::print_alpha_char
-
+.proc echoback
 	lda INTERRUPT_IDENT
 	and #%00000001
-	; If zero, interrupt is pending
-	bne @end
-@read_buffer:
+	beq @read
+	rts
+@read:
 	lda RX_BUFFER
-	sta zp_TMP0
-@end:
-	;ply
-	;plx
-	;pla
-	plp
-	jmp (PREVIOUS_ISR)        ; Pass control to the previous handler
-
-  rti
+	sta TX_HOLDING
+	rts
 .endproc
-
 
 on_string: .byte "on ",0
 off_string: .byte "off",0
