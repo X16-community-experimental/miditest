@@ -2,9 +2,22 @@
 
 ; Previous ISR
 PREVIOUS_ISR: .word $0000
+PREVIOUS_NMI: .word $0000
+zp_MIDI_BASE: .word $0000
 
 ; The IO Address range for MIDI
-zp_MIDI_IO_BASE: .word $0000
+zp_MIDI_IO_BASE1: .word $0000
+zp_MIDI_IO_BASE2: .word $0000
+zp_CURRENT_CARD: .word $0000
+zp_USER_CARD: .word $0000
+zp_NMI_COUNTER: .byte $00
+zp_LAST_NMI_COUNTER: .byte $00
+
+zp_SCREEN_X: .byte $00
+zp_SCREEN_Y: .byte $00
+
+zp_CARD1_BYTE: .byte $00
+zp_CARD2_BYTE: .byte $00
 
 ; Value to set UART divisor baud rate
 zp_BAUD_RATE: .word $0000
@@ -61,14 +74,6 @@ zp_MATH2: .word $0000
 zp_MATH3: .word $0000
 zp_MATH4: .word $0000
 zp_MATH5: .word $0000
-
-; Temp vars for address manipulation
-zp_ADDR0: .word $0000
-zp_ADDR1: .word $0000
-zp_ADDR2: .word $0000
-; Special value for returning from a jump table
-; (e.g. the effects table)
-zp_ADDR_RETURN: .word $0000
 
 .segment "EXTZP"
 

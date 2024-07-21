@@ -11,9 +11,11 @@
 
 ; The MIDI IO base, which depends on the IO and Hi/Lo jumper settings on the card.
 ; Base address is silkscreen on the card.
-MIDI_IO_BASE=$9F60
-; Testing 9-pin
 ;MIDI_IO_BASE=$9F60
+; "Standard" MIDI I/O (IO6/Low)
+;MIDI_IO_BASE=$9FC0
+; Testing 9-pin
+MIDI_IO_BASE=$9F60
 ;MIDI_IO_BASE=$9FE0
 ;MIDI_IO_BASE=$9F80
 ;MIDI_IO_BASE=$9FE0

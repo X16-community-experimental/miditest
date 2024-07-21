@@ -1,4 +1,5 @@
 ; Graphic routines
+.segment "CODE"
 
 .scope graphics
   ; Vera specific routines
@@ -7,20 +8,7 @@
     .include "library/graphics/vera/load_palette16.asm"
   .endscope
 
-  ; Drawing rountines
-  .scope drawing
-    .include "library/graphics/drawing/goto_xy.asm"
-    .include "library/graphics/drawing/print_character.asm"
-    .include "library/graphics/drawing/print_hex.asm"
-    .include "library/graphics/drawing/print_binary.asm"
-    .include "library/graphics/drawing/print_alpha_char.asm"
-    .include "library/graphics/drawing/print_string.asm"
-    .include "library/graphics/drawing/cursor.asm"
-    .include "library/graphics/drawing/chars_to_number.asm"
-  .endscope
-  
-  .scope ui
-    .include "library/graphics/ui/update_screen_values.asm"
-  .endscope
+  .include "library/graphics/drawing/main.asm"
+  .include "library/graphics/printing/main.asm"
 
 .endscope

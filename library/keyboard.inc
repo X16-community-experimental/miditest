@@ -54,6 +54,7 @@ KEY_E = $45
 KEY_F = $46
 KEY_G = $47
 KEY_I = $49
+KEY_L = $4C
 KEY_M = $4D
 KEY_N = $4E
 KEY_O = $4F

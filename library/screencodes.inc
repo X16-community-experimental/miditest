@@ -2,6 +2,8 @@
 ; See: https://sta.c64.org/cbm64scr.html
 
 ; Chars and Keys
+SCREENCODE_0 = $30
+SCREENCODE_1 = $31
 SCREENCODE_HASH = $23
 SCREENCODE_ARROW_UP = $1E
 SCREENCODE_DASH = $2D
@@ -33,8 +35,6 @@ SCREENCODE_R = $12
 SCREENCODE_S = $13
 SCREENCODE_T = $14
 SCREENCODE_V = $16
-SCREENCODE_0 = $30
-SCREENCODE_1 = $31
 
 ; Graphics
 SCREENCODE_CIRCLE_FULL = $51
@@ -62,8 +62,14 @@ SCREENCODE_INV_VU7 = $E4
 SCREENCODE_VU_FULL = $A0
 
 
+; These are actually PETSCII not screencodes.
 ; Special value we will use to denote return in screencode strings
-SCREENCODE_RETURN = $FF
-
-; Special value for null terminated strings
-SCREENCODE_NULL = $00
+SCREENCODE_RETURN = $0D
+; Next byte sets color
+SCREENCODE_COLOR = $01
+; Next 2 bytes set X and Y
+SCREENCODE_XY = $02
+; Enable/disable PETSCII alphanumeric conversion
+;	0 = PETSCII conversion
+; 1 = no conversion (assumes screencode values)
+SCREENCODE_PRINT_MODE = $04

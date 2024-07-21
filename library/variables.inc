@@ -35,6 +35,7 @@ L1_MAPBASE = %00000000
 TILEBASE = $F8  ; Default
 ; Kernel Settings
 ISR_HANDLER = $0314
+NMI_HANDLER = $0318
 
 ; Constants
 SCREEN_X     = $A0    ; 80 * 2 (char + color)
