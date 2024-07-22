@@ -170,11 +170,6 @@ start:
 	sta zp_CURRENT_CARD + 1
 	jsr init
 
-
-	;jsr graphics::drawing::print_binary
-
-	;jsr enable_clock_nmi
-
 	print_string_macro text_strings
 
 	lda #$1F
@@ -278,7 +273,7 @@ loop:
 @n:
 	cmp #KEY_N
 	bne print_stuff
-	jsr enable_clock_nmi
+	jsr enable_nmi
 	;bra print_stuff
 
 print_stuff:
@@ -515,27 +510,17 @@ exit:
 	rts
 .endproc
 
-.proc enable_clock_nmi
+.proc enable_nmi
 	sei
-	;ldx #$00
-	;lda NMI_HANDLER,x
-	;sta PREVIOUS_NMI,x
 	lda #<clock_isr_nmi
-	;sta NMI_HANDLER,x
 	sta $0318
-	;inx
-	;lda NMI_HANDLER,x
-	;sta PREVIOUS_NMI,x
 	lda #>clock_isr_nmi
-	;sta NMI_HANDLER,x
 	sta $0319
 	cli
 	rts
 .endproc
 
 .proc clock_isr_nmi
-	;brk
-	;sei
 	phy
 	pha
 
@@ -562,7 +547,12 @@ exit:
 @cleanup:
 	pla
 	ply
-	;cli
+
+	; KERNAL's NMI set this (__nmi)
+	pla
+	sta ROM_BANK
+	pla
+
   rti
 .endproc
 
