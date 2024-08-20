@@ -8,6 +8,7 @@ zp_MIDI_BASE: .word $0000
 ; The IO Address range for MIDI
 zp_MIDI_IO_BASE1: .word $0000
 zp_MIDI_IO_BASE2: .word $0000
+zp_WAVETABLE_IO_BASE: .word $0000
 zp_CURRENT_CARD: .word $0000
 zp_USER_CARD: .word $0000
 zp_NMI_COUNTER: .byte $00
@@ -15,6 +16,9 @@ zp_LAST_NMI_COUNTER: .byte $00
 
 zp_SCREEN_X: .byte $00
 zp_SCREEN_Y: .byte $00
+
+zp_MIDI_IN_BYTE: .byte $00
+zp_CURRENT_PATCH: .byte $00
 
 zp_CARD1_BYTE: .byte $00
 zp_CARD2_BYTE: .byte $00
