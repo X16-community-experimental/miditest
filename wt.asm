@@ -9,6 +9,7 @@
 .include "library/variables.inc"
 .include "library/macros.inc"
 .include "library/graphics/main.asm"
+.include "library/midi.asm"
 .include "library/files/main.asm"
 
 
@@ -61,18 +62,20 @@
 ;; Scratch Register Test Value
 SCRATCH_TEST_VALUE = $2F
 
-; MIDI Values
-MIDI_CLOCK = $F8
-MIDI_PROG_CHANGE_CHANNEL_0 = $C0
-MIDI_RESET = $FF
-
-
 ; Drawing Constants
-ADDRESS_Y = $04
+ADDRESS_Y = $05
 PATCH_NAME_LENGTH = $20
-CURRENT_PATCH_X = $10
-CURRENT_PATCH_Y = $06
+CURRENT_PATCH_X = $12
+CURRENT_PATCH_Y = $07
 
+CURRENT_BANK_X = $12
+CURRENT_BANK_Y = $08
+
+REVERB_X = $12
+REVERB_Y = $09
+
+CHORUS_X = $12
+CHORUS_Y = $0A
 
 LEFT_COL = $13
 RIGHT_COL = $1E
@@ -83,7 +86,7 @@ cursor_y: .byte $00
 cursor_layer: .byte $00
 
 palette:
-.byte $04,$00     ; super dark blue 00
+.byte $02,$00     ; super dark blue 00
 .byte $FF,$0F     ; white 01
 .byte $00,$0F     ; red 02
 .byte $DF,$0D     ; cyan 03
@@ -112,6 +115,11 @@ start:
 	sta VERA_L0_config
 	lda #RES128x64x16       ; L1 is the UI
 	sta VERA_L1_config
+
+	clc
+	lda #$03
+	jsr SCREEN_SET_MODE
+	
 
 	; L0 = Pattern Data 
 	; ($10000 start of HiVRAM)
@@ -205,9 +213,19 @@ start:
 	jsr graphics::printing::print_hex
 
 	stz zp_MIDI_IN_BYTE
+	stz zp_MIDI_IN_FLAG
+	stz zp_MT32
+	stz zp_MIDI_CHANNEL
+	stz zp_REVERB_LEVEL
+	stz zp_CHORUS_LEVEL
+
 	; $00 would be grand piano
 	stz zp_CURRENT_PATCH
 	jsr change_patch
+
+	lda #$01
+	sta zp_MT32
+	jsr toggle_mt32
 
 ;; Infinite Read Loop
 loop:
@@ -218,12 +236,17 @@ loop:
 @check_keys:
 @quit:
 	cmp #KEY_Q
-	bne @reset_wavetable
+	bne @toggle_bank
 	jmp exit
+@toggle_bank:
+	cmp #KEY_M
+	bne @reset_wavetable
+	jsr toggle_mt32
+	bra @check_midi
 @reset_wavetable:
 	cmp #KEY_R
 	bne @dec_patch
-	jsr reset_wavetable
+	jsr midi::sam2695::reset
 	bra @check_midi
 @dec_patch:
 	cmp #KEY_MINUS
@@ -233,17 +256,43 @@ loop:
 	bra @check_midi
 @inc_patch:
 	cmp #KEY_EQUALS		; Basically plus but no shift
-	bne @check_midi
+	bne @dec_reverb
 	inc zp_CURRENT_PATCH
 	jsr change_patch
 	bra @check_midi
+@dec_reverb:
+	cmp #KEY_DELETE
+	bne @inc_reverb
+	dec zp_REVERB_LEVEL
+	jsr update_reverb_level
+	bra @check_midi
+@inc_reverb:
+	cmp #KEY_INSERT
+	bne @dec_chorus
+	inc zp_REVERB_LEVEL
+	jsr update_reverb_level
+	bra @check_midi
+@dec_chorus:
+	cmp #KEY_END
+	bne @inc_chorus
+	dec zp_CHORUS_LEVEL
+	jsr update_chorus_level
+	bra @check_midi
+@inc_chorus:
+	cmp #KEY_HOME
+	bne @check_midi
+	inc zp_CHORUS_LEVEL
+	jsr update_chorus_level
+	bra @check_midi
+
+
 @check_midi:
-	jsr read_midi_in
-	lda zp_MIDI_IN_BYTE
+	jsr midi::read_midi_in
+	lda zp_MIDI_IN_FLAG
 	bne @forward_to_wavetable
-	bra @loop_end
+	 bra @loop_end
 @forward_to_wavetable:
-	jsr forward_to_wavetable
+	jsr midi::forward_to_wavetable
 @loop_end:
 	jmp loop
 
@@ -298,27 +347,10 @@ exit:
 	rts
 .endproc
 
-.proc read_midi_in
-	ldy #RX_BUFFER_OFFSET
-  lda (zp_CURRENT_CARD),y
-	bne @byte
-	rts
-@byte:
-	sta zp_MIDI_IN_BYTE
-	rts
-.endproc
-
-.proc forward_to_wavetable
-	lda zp_MIDI_IN_BYTE
-	ldy #TX_HOLDING_OFFSET
-  sta (zp_WAVETABLE_IO_BASE),y
-	stz zp_MIDI_IN_BYTE
-	rts
-.endproc
-
 .proc change_patch
 	ldy #TX_HOLDING_OFFSET
-	lda #MIDI_PROG_CHANGE_CHANNEL_0
+	lda #midi::message::PROG_CHANGE
+	ora zp_MIDI_CHANNEL
   sta (zp_WAVETABLE_IO_BASE),y
 
 	lda zp_CURRENT_PATCH
@@ -376,10 +408,23 @@ exit:
 	rts
 .endproc
 
-.proc reset_wavetable
-	ldy #TX_HOLDING_OFFSET
-	lda #MIDI_RESET
-  sta (zp_WAVETABLE_IO_BASE),y
+.proc toggle_mt32
+	print_string_macro bank_text_location
+	lda zp_MT32
+	beq @turn_on
+@turn_off:
+	stz zp_MT32
+	print_string_macro general_midi_bank_text
+	ldx #midi::message::cc::BANK_SELECT		
+	lda #$00 ; Set back to base bank
+	bra @send_cc
+@turn_on:
+	inc zp_MT32
+	print_string_macro mt32_bank_text
+	ldx #midi::message::cc::BANK_SELECT		
+	lda #$7F ; Set to MT32 bank
+@send_cc:
+	jsr midi::send_cc
 	stz zp_CURRENT_PATCH
 	jsr change_patch
 	rts
@@ -397,21 +442,84 @@ exit:
 	rts
 .endproc
 
+.proc update_reverb_level
+	lda #REVERB_X
+	ldy #REVERB_Y
+	jsr graphics::drawing::goto_xy
+
+	lda zp_REVERB_LEVEL
+	and #%01111111
+	sta zp_REVERB_LEVEL
+
+	jsr graphics::printing::print_hex
+
+	lda zp_REVERB_LEVEL
+	ldx #midi::sam2695::cc::REVERB_LEVEL
+	jsr midi::send_cc
+
+	rts
+.endproc
+
+.proc update_chorus_level
+	lda #CHORUS_X
+	ldy #CHORUS_Y
+	jsr graphics::drawing::goto_xy
+
+	lda zp_CHORUS_LEVEL
+	and #%01111111
+	sta zp_CHORUS_LEVEL
+
+	jsr graphics::printing::print_hex
+
+	lda zp_CHORUS_LEVEL
+	ldx #midi::message::cc::CHORUS_LEVEL
+	jsr midi::send_cc
+
+	rts
+.endproc
+
+
 text_strings: 
-	.byte SCREENCODE_XY,$00,$00
-	.byte "midi keyboard to wavetable",SCREENCODE_RETURN
-	.byte "by tim soderstrom (the dreamtracker guy)",SCREENCODE_RETURN
+	.byte SCREENCODE_XY,$00,$01
+	.byte " midi keyboard to "
+	.byte SCREENCODE_COLOR,$06,"w"
+	.byte SCREENCODE_COLOR,$0D,"a"
+	.byte SCREENCODE_COLOR,$07,"v"
+	.byte SCREENCODE_COLOR,$08,"e"
+	.byte SCREENCODE_COLOR,$07,"t"
+	.byte SCREENCODE_COLOR,$0A,"a"
+	.byte SCREENCODE_COLOR,$04,"b"
+	.byte SCREENCODE_COLOR,$06,"l"
+	.byte SCREENCODE_COLOR,$0D,"e"
+	.byte SCREENCODE_COLOR,$01
+	.byte SCREENCODE_RETURN
+	.byte  " by tim soderstrom (dreamtracker dude)",SCREENCODE_RETURN
 	.byte SCREENCODE_RETURN
 	.byte "                  ext midi | wavetable",SCREENCODE_RETURN
-	.byte "address:          $XXXX    | $XXXX",SCREENCODE_RETURN
+	.byte " address:         $XXXX    | $XXXX",SCREENCODE_RETURN
 	.byte SCREENCODE_RETURN
-	.byte "current patch:",SCREENCODE_RETURN
+	.byte " current patch :",SCREENCODE_RETURN
+	.byte " current bank  :",SCREENCODE_RETURN
+	.byte " reverb        :  00",SCREENCODE_RETURN
+	.byte " chorus        :  00",SCREENCODE_RETURN
 	.byte SCREENCODE_RETURN
-	.byte "key commands:",SCREENCODE_RETURN
-	.byte "r: reset wavetable (panic)",SCREENCODE_RETURN
-	.byte "q: quit (reset system)",SCREENCODE_RETURN
+	.byte " key commands:",SCREENCODE_RETURN
+	.byte " +/-: change patch",SCREENCODE_RETURN
+	.byte " m: toggle mt-32 soundset",SCREENCODE_RETURN
+	.byte " insert/delete: inc/dec reverb level",SCREENCODE_RETURN
+	.byte " home/end: inc/dec chorus level",SCREENCODE_RETURN
+	.byte " r: reset wavetable (panic)",SCREENCODE_RETURN
+	.byte " q: quit (reset system)",SCREENCODE_RETURN
 	.byte 0
 
+bank_text_location:
+	.byte SCREENCODE_XY,CURRENT_BANK_X,CURRENT_BANK_Y
+	.byte 0
+
+general_midi_bank_text: 
+	.byte "general midi",0
+mt32_bank_text: 
+	.byte "mt-32       ",0
 
 general_midi_names:
 .byte "acoustic grand                  " 

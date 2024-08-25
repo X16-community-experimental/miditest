@@ -17,8 +17,14 @@ zp_LAST_NMI_COUNTER: .byte $00
 zp_SCREEN_X: .byte $00
 zp_SCREEN_Y: .byte $00
 
+zp_MIDI_CHANNEL: .byte $00
 zp_MIDI_IN_BYTE: .byte $00
+zp_MIDI_IN_FLAG: .byte $00
 zp_CURRENT_PATCH: .byte $00
+zp_MT32: .byte $00
+zp_REVERB_LEVEL: .byte $00
+zp_CHORUS_LEVEL: .byte $00
+
 
 zp_CARD1_BYTE: .byte $00
 zp_CARD2_BYTE: .byte $00
