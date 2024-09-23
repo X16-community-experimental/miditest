@@ -2,3 +2,8 @@ x16emu
 rom.bin
 *.o
 *.PRG
+*.lst
+*.sh
+box16
+x16emu
+*.zip
