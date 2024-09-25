@@ -12,12 +12,12 @@
   lda #>msg
   sta zp_ARG0+1
   lda xpos
-  sta zp_ARG2
+  sta zp_ARG1
   lda ypos
-  sta zp_ARG3
+  sta zp_ARG2
   lda color
   sta zp_TEXT_COLOR
-  jsr graphics::drawing::print_null_terminated_string
+  jsr graphics::printing::print_string
 .endmacro
 
 .macro vera_stride stride

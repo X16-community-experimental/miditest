@@ -15,6 +15,8 @@
 	; Just use the song speed, dummy.
 	;PULSES_PER_ROW=$06
 
+	;ISR_HANDLER = $0314
+
 
 	; MIDI Default per Kevin, IO6/Low (2Mhz)
 	IO6_ADDRESS=$9FC0
@@ -272,8 +274,13 @@ loop:
 	bra print_stuff
 @n:
 	cmp #KEY_N
-	bne @f
+	bne @p
 	jsr enable_nmi
+	bra print_stuff
+@p:
+	cmp #KEY_P
+	bne @f
+	jsr enable_irq
 	bra print_stuff
 ; Inject NMI
 @f:
@@ -528,6 +535,23 @@ exit:
 	rts
 .endproc
 
+.proc enable_irq
+	sei
+	ldx #$00
+	lda ISR_HANDLER,x
+	sta previous_isr_handler,x
+	lda #<inc_test_irq
+	sta ISR_HANDLER,x
+	inx
+	lda ISR_HANDLER,x
+	sta previous_isr_handler,x
+	lda #>inc_test_irq
+	sta ISR_HANDLER,x
+
+	cli
+	rts
+.endproc
+
 .proc clock_isr_nmi
 	phy
 	pha
@@ -566,12 +590,26 @@ exit:
 
 .proc inc_test_nmi
 	inc zp_NMI_COUNTER
+	ldy #RX_BUFFER_OFFSET
+  lda (zp_USER_CARD),y
 
 	; KERNAL's NMI set this (__nmi)
 	pla
 	sta ROM_BANK
 	pla
 	rti
+.endproc
+
+.proc inc_test_irq
+  push_state_disable_interrupts;
+	ldy #RX_BUFFER_OFFSET
+  lda (zp_USER_CARD),y
+	beq @end
+@nonzero:
+	inc zp_NMI_COUNTER
+@end:
+  plp
+	jmp (previous_isr_handler)        ; Pass control to the previous handler
 .endproc
 
 
@@ -661,6 +699,9 @@ exit:
 	rts
 .endproc
 
+previous_isr_handler: .word $0000
+
+
 text_strings: 
 	.byte SCREENCODE_XY,$00,$00
 	.byte "midi tester magic",SCREENCODE_RETURN
@@ -688,8 +729,10 @@ text_strings:
 	.byte "r: read byte buffer",SCREENCODE_RETURN
 	.byte "t: reinit cards (both cards, disables interrupts, flushes read buffer and fifo)",SCREENCODE_RETURN
 	.byte "n: load nmi routine (both cards)",SCREENCODE_RETURN
+	.byte "p: load irq routine (both cards)",SCREENCODE_RETURN
 	.byte "f: inject nmi (for testing, breaks stuff)",SCREENCODE_RETURN
-	.byte "typical test sequence would be i,n,m",SCREENCODE_RETURN
+	.byte "typical nmi test sequence would be i,n,m",SCREENCODE_RETURN
+	.byte "typical irq test sequence would be i,p,m",SCREENCODE_RETURN
 	.byte SCREENCODE_XY,$00,$1E
 	.byte "output:",SCREENCODE_RETURN
 	.byte 0
